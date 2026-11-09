@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.2
+- Goal pace in hours (overall) alongside level pace
+- Time at professions, Auction House, bank and mail no longer counts against the level timer
+
 ## 0.10.1
 - Plans with recipes WoW Forever added (read from the profession window), e.g. Enchant Chest - Inferior Stamina
 - Counts the reagent bag in your bags

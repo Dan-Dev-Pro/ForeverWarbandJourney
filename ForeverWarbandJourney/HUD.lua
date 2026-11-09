@@ -127,17 +127,18 @@ function C:UpdateHUD()
   f.name:SetText(ccode(k) .. self:Short(k) .. "|r  |cffffffff" .. string.format("%.1f", lv) .. "|r" .. (mine and (DIM .. "  to " .. mine.to .. "|r") or ""))
   local g = self:ActiveGoal()
   if g and g.ch == k then
-    local d = self:DaysAhead(g)
-    if d and d >= 0.5 then f.status:SetText(string.format("%s+%.1f days|r", GREEN, d))
-    elseif d and d <= -0.5 then f.status:SetText(string.format("%s%.1f days behind|r", RED, -d))
-    else f.status:SetText(GOLD .. "on plan|r") end
+    -- overall pace on the goal, in hours of play
+    local gh = self:GoalAheadHours(g)
+    if gh and math.abs(gh) >= 1 / 6 then f.status:SetText(DIM .. "goal |r" .. (gh > 0 and (GREEN .. hm(gh * 3600) .. " ahead|r") or (RED .. hm(-gh * 3600) .. " behind|r")))
+    elseif gh then f.status:SetText(DIM .. "goal |r" .. GOLD .. "on plan|r")
+    else f.status:SetText(GOLD .. "active goal|r") end
   elseif g then f.status:SetText(DIM .. "plan says " .. self:Short(g.ch) .. "|r")
   else f.status:SetText(#self.db.goals == 0 and (DIM .. "no goals|r") or (GREEN .. "goals done|r")) end
 
   local live = self.LevelLive and self:LevelLive()
   if live then
     f.sub:SetText(string.format("Level %d  %s %s/ %s|r", live.lv, hm(live.spent), DIM, hm(live.est)))
-    f.subR:SetText(live.ahead >= 0 and (GREEN .. hm(live.ahead) .. " ahead|r") or (RED .. hm(-live.ahead) .. " behind|r"))
+    f.subR:SetText(DIM .. "level |r" .. (live.ahead >= 0 and (GREEN .. hm(live.ahead) .. " ahead|r") or (RED .. hm(-live.ahead) .. " behind|r")))
   elseif not max then
     f.sub:SetText(DIM .. "Level time shows after /played loads|r"); f.subR:SetText("")
   else f.sub:SetText("Level 60"); f.subR:SetText("") end

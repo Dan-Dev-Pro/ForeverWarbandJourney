@@ -550,7 +550,8 @@ function C:LevelTimes(k)
   if not c or not c.lvlog then return out end
   for lv, t in pairs(c.lvlog) do
     local nx = c.lvlog[lv + 1]
-    if nx and nx > t then out[#out + 1] = { lv = lv, h = (nx - t) / 3600, est = perLvl(lv) * self:ClassMult(k) * self:ProfMult(k) * (self:Pace(k)) } end
+    local busy = c.busy and c.busy[lv] or 0
+    if nx and nx > t then out[#out + 1] = { lv = lv, h = math.max(60, nx - t - busy) / 3600, busy = busy / 3600, est = perLvl(lv) * self:ClassMult(k) * self:ProfMult(k) * (self:Pace(k)) } end
   end
   table.sort(out, function(a, b) return a.lv > b.lv end)
   return out
@@ -568,9 +569,10 @@ function C:LevelLive()
   local mx = UnitXPMax("player") or 0
   local frac = mx > 0 and (UnitXP("player") or 0) / mx or 0
   local est = self:LevelEst(k, lv) * 3600
-  local spent = c.playedLevel + (GetTime() - self.playedAt)
+  local busy = self:BusyAt(lv)
+  local spent = math.max(0, c.playedLevel + (GetTime() - self.playedAt) - busy)
   local expect = est * frac
-  return { lv = lv, spent = spent, est = est, expect = expect, ahead = expect - spent, frac = frac,
+  return { lv = lv, spent = spent, est = est, expect = expect, ahead = expect - spent, frac = frac, busy = busy,
     played = (c.played or 0) + (GetTime() - self.playedAt) }
 end
 
@@ -610,4 +612,59 @@ function C:Tonight(k)
   end
   if g then target = math.min(target, g.to) end
   return { target = target, left = left, plan = plan, played = played, onPlan = onPlan, lv = lv, goal = g }
+end
+
+-- time at professions, the Auction House, bank and mailbox, per level. It doesn't count against the
+-- level timer, so an afternoon of crafting doesn't make your levelling look slow.
+local open, since = {}, nil
+function C:BusyAt(lv)
+  local c = self.key and self:Char(self.key)
+  local b = c and c.busy and c.busy[lv] or 0
+  if since then b = b + (GetTime() - since) end
+  return b
+end
+local function flush()
+  if not since then return end
+  local c = C.key and C:Char(C.key)
+  local lv = UnitLevel("player")
+  if c and lv then
+    c.busy = c.busy or {}
+    c.busy[lv] = (c.busy[lv] or 0) + (GetTime() - since)
+  end
+  since = nil
+end
+C.FlushBusy = flush
+local PAIRS = { TRADE_SKILL_SHOW = { "trade", true }, TRADE_SKILL_CLOSE = { "trade", false }, CRAFT_SHOW = { "craft", true }, CRAFT_CLOSE = { "craft", false },
+  AUCTION_HOUSE_SHOW = { "ah", true }, AUCTION_HOUSE_CLOSED = { "ah", false }, BANKFRAME_OPENED = { "bank", true }, BANKFRAME_CLOSED = { "bank", false },
+  MAIL_SHOW = { "mail", true }, MAIL_CLOSED = { "mail", false } }
+local bev = CreateFrame("Frame")
+for e in pairs(PAIRS) do pcall(bev.RegisterEvent, bev, e) end
+pcall(bev.RegisterEvent, bev, "PLAYER_LEVEL_UP"); pcall(bev.RegisterEvent, bev, "PLAYER_LOGOUT")
+bev:SetScript("OnEvent", function(_, e)
+  if not C.db then return end
+  if e == "PLAYER_LEVEL_UP" or e == "PLAYER_LOGOUT" then
+    -- close the old level's count; keep counting into the new level if a window is still open
+    local was = since ~= nil
+    if e == "PLAYER_LEVEL_UP" and since then
+      local c = C.key and C:Char(C.key)
+      local lv = UnitLevel("player") - 1
+      if c then c.busy = c.busy or {}; c.busy[lv] = (c.busy[lv] or 0) + (GetTime() - since) end
+      since = GetTime()
+    else flush() end
+    return
+  end
+  local p = PAIRS[e]
+  if not p then return end
+  open[p[1]] = p[2] or nil
+  if next(open) then since = since or GetTime() else flush() end
+end)
+
+-- goal pace in hours: how far ahead or behind the goal's deadline plan you are, in hours of play
+function C:GoalAheadHours(g)
+  if not g or not g.by then return nil end
+  local e = self:ExpectedLv(g, time())
+  if not e then return nil end
+  local L = self:Lv(g.ch)
+  if L >= e then return self:Hours(g.ch, e, L) end
+  return -self:Hours(g.ch, L, e)
 end
