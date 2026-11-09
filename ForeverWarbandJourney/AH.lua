@@ -79,7 +79,7 @@ function C:ScanSet(k)
     if C.RECIPES[prof] then
       local skill, to = v[1], self:RecSkill(k, v[1])
       local known = c.known and c.known[prof]
-      for name, rec in pairs(C.RECIPES[prof]) do
+      for name, rec in pairs(self:RecipesFor(k, prof)) do
         local live = known and known[name]
         local usable = live and live[1] ~= "grey" or (not live and rec.l < to and rec.g > skill)
         if usable then for _, m in ipairs(rec.r) do add(m[1], 0) end end

@@ -272,7 +272,7 @@ local function iconOf(id)
   if not i and GetItemInfoInstant then i = select(5, GetItemInfoInstant(id)) end
   return i or "INV_Misc_QuestionMark"
 end
-local function iname(id) return C.ITEM[id] and C.ITEM[id][1] or ("item " .. id) end
+local function iname(id) return C.ITEM[id] and C.ITEM[id][1] or (C.db.items and C.db.items[id]) or ("item " .. id) end
 local function goldOnly(c) return (C.Money(c or 0):match("^(%-?%d+g)")) or "0g" end
 
 -- NOW: what to do, how you're tracking, this level

@@ -13,7 +13,7 @@ function C:ProfTarget(k, skill)
 end
 
 -- inventory ---------------------------------------------------------------------------------
-local function tracked(id) return id and (C.ITEM[id] or C.MADEFROM[id]) end
+local function tracked(id) return id and (C.ITEM[id] or C.MADEFROM[id] or (C.db and C.db.items and C.db.items[id])) end
 local function scan(bags)
   local out = {}
   for _, bag in ipairs(bags) do
@@ -27,11 +27,18 @@ local function scan(bags)
 end
 function C:ScanBags()
   local c = self.key and self:Char(self.key)
-  if c then c.bags = scan({ 0, 1, 2, 3, 4 }); c.bagsT = time() end
+  -- backpack, bags, and the reagent bag (slot 5 on modern clients)
+  local last = (NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 1)
+  local list = {}
+  for b = 0, last do list[#list + 1] = b end
+  if c then c.bags = scan(list); c.bagsT = time() end
 end
 function C:ScanBank()
   local c = self.key and self:Char(self.key)
-  if c then c.bank = scan({ -1, 5, 6, 7, 8, 9, 10 }); c.bankT = time() end
+  local first = (NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 0) + 1
+  local list = { -1, -3 }
+  for b = first, first + (NUM_BANKBAGSLOTS or 7) - 1 do list[#list + 1] = b end
+  if c then c.bank = scan(list); c.bankT = time() end
 end
 
 -- conversions: what an item is made from. The game's own recipe (read from your profession window) wins
@@ -208,6 +215,22 @@ function C:ReadTradeSkill(craft)
         if C_TradeSkillUI.GetRecipeSchematic then
           local ok, sc = pcall(C_TradeSkillUI.GetRecipeSchematic, id, false)
           local out = ok and sc and sc.outputItemID
+          -- every recipe's reagents, so recipes WoW Forever added (not in the built-in data) can be planned too
+          if ok and sc and sc.reagentSlotSchematics then
+            local rr = {}
+            for _, slot in ipairs(sc.reagentSlotSchematics) do
+              local rg = slot.reagents and slot.reagents[1]
+              if rg and rg.itemID and (slot.quantityRequired or 0) > 0 and (slot.reagentType == nil or slot.reagentType == 1) then
+                rr[#rr + 1] = { rg.itemID, slot.quantityRequired }
+                self.db.items = self.db.items or {}
+                if not C.ITEM[rg.itemID] and not self.db.items[rg.itemID] then
+                  local nm = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(rg.itemID)) or (GetItemInfo(rg.itemID))
+                  if nm then self.db.items[rg.itemID] = nm end
+                end
+              end
+            end
+            known[r.name][3] = rr
+          end
           if out and (C.MADEFROM[out] or C.ITEM[out]) and sc.reagentSlotSchematics then
             local q = math.max(1, sc.quantityMin or 1)
             local list = {}
@@ -247,6 +270,9 @@ function C:ReadTradeSkill(craft)
   if not prof or prof == "UNKNOWN" or not next(known) then return end
   c.known = c.known or {}
   c.known[prof] = known
+  c.knownSkill = c.knownSkill or {}
+  c.knownSkill[prof] = c.profs and c.profs[prof] and c.profs[prof][1]
+  self.recV = (self.recV or 0) + 1
   c.knownT = c.knownT or {}
   c.knownT[prof] = time()
   -- reading the window is also a good moment to refresh skill levels
@@ -288,6 +314,41 @@ ev:SetScript("OnEvent", function(_, e)
   elseif e == "PLAYER_ENTERING_WORLD" then C:ScanBags() end
 end)
 
+-- recipes to plan with: the built-in ones, plus any your profession window has that the data doesn't
+-- (WoW Forever added recipes like Enchant Chest - Inferior Stamina). Their skill range is estimated
+-- from the colour the window showed at the skill you had when you opened it.
+local GUESS = { orange = { 8, 30 }, yellow = { -5, 15 }, green = { -20, 5 } }
+local rcache = {}
+function C:RecipesFor(k, prof)
+  local key = k .. prof .. (self.recV or 0)
+  if rcache[key] then return rcache[key] end
+  local out = {}
+  for name, rec in pairs(C.RECIPES[prof] or {}) do out[name] = rec end
+  local c = self:Char(k)
+  local known = c and c.known and c.known[prof]
+  local s0 = c and c.knownSkill and c.knownSkill[prof] or (c and c.profs and c.profs[prof] and c.profs[prof][1]) or 1
+  for name, live in pairs(known or {}) do
+    if not out[name] and live[3] and #live[3] > 0 then
+      local gq = GUESS[live[1]]
+      if gq then out[name] = { l = 0, y = s0 + gq[1], g = s0 + gq[2], r = live[3], extra = true } end
+    end
+  end
+  rcache = { [key] = out }
+  return out
+end
+-- what kind of material an item is, for cost weights (by name for items the data doesn't know)
+function C:Kind(id)
+  local it = C.ITEM[id]
+  if it then return it[2] end
+  local nm = self.db and self.db.items and self.db.items[id] or ""
+  if nm:find("Dust") or nm:find("Essence") or nm:find("Shard") then return "ench" end
+  if nm:find(" Ore$") then return "ore" end
+  if nm:find("Cloth$") then return "cloth" end
+  if nm:find("Stone$") then return "stone" end
+  if nm:find("Thread") or nm:find("Vial") or nm:find("Flux") or nm:find("Dye") or nm:find("Wood") then return "vendor" end
+  return "other"
+end
+
 -- what to craft right now ------------------------------------------------------------------------
 -- Ranks every recipe you could make at this skill. Your profession window is the truth for colours
 -- (WoW Forever has changed some recipes); the built-in data fills in recipes you haven't opened yet.
@@ -312,15 +373,14 @@ function C:CraftNow(k, prof, skill, cap, n)
   local known = c and c.known and c.known[prof]
   local have = self:RawHave()
   local list = {}
-  for name, rec in pairs(C.RECIPES[prof] or {}) do
+  for name, rec in pairs(self:RecipesFor(k, prof)) do
     local live = known and known[name]
     local col = live and live[1] or C.Colour(skill, rec.l, rec.y, rec.g)
     local ch = chanceFor(col, skill, rec)
     if ch > 0 and (live or rec.l <= skill) then
       local cost = 0
       for _, m in ipairs(self:RawOf(rec)) do
-        local it = C.ITEM[m[1]]
-        local w = WEIGHT[it and it[2] or "other"] or 8
+        local w = WEIGHT[self:Kind(m[1])] or 8
         if (have[m[1]] or 0) >= m[2] then w = w * .5 end
         cost = cost + w * m[2]
       end
@@ -408,8 +468,7 @@ function C:PlanLive(k, prof, a, b)
       for _, m in ipairs(rec.r) do
         local u = self:UnitCost(m[1])
         if not u then
-          local it = C.ITEM[m[1]]
-          u = 60 * (WEIGHT[it and it[2] or "other"] or 8)   -- unpriced: rough guess so it isn't free
+          u = 60 * (WEIGHT[self:Kind(m[1])] or 8)   -- unpriced: rough guess so it isn't free
         end
         t = t + u * m[2] * (1 - .98 * ownedShare(m[1], m[2]))
       end
@@ -418,14 +477,14 @@ function C:PlanLive(k, prof, a, b)
     for _, m in ipairs(rec.r) do
       local w = 0
       local acc = self:Expand(m[1], 1, {})
-      for id, n in pairs(acc) do local it = C.ITEM[id]; w = w + (WEIGHT[it and it[2] or "other"] or 8) * n end
+      for id, n in pairs(acc) do w = w + (WEIGHT[self:Kind(id)] or 8) * n end
       t = t + w * m[2] * (1 - .98 * ownedShare(m[1], m[2]))
     end
     return t
   end
   for s = a, b - 1 do
     local best, bestV, bestCh
-    for name, rec in pairs(C.RECIPES[prof] or {}) do
+    for name, rec in pairs(self:RecipesFor(k, prof)) do
       local live = known and known[name]
       if live or rec.l <= s then
         local col = colourAt(rec, live, s, a)
@@ -596,7 +655,7 @@ function C:RouteAhead(k, prof, skill)
   for _, st in ipairs(rt.steps) do
     if st.t > skill then
       local live = known and known[st.n]
-      local rec = C.RECIPES[prof] and C.RECIPES[prof][st.n]
+      local rec = self:RecipesFor(k, prof)[st.n]
       local grey = live and live[1] == "grey"
       if rec and not grey then
         local from = math.max(st.f, skill)
