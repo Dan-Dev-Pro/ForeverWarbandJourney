@@ -1,0 +1,6 @@
+package-as: ForeverWarbandJourney
+move-folders:
+  ForeverWarbandJourney/ForeverWarbandJourney: ForeverWarbandJourney
+ignore:
+  - README.md
+  - CHANGELOG.md
