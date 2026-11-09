@@ -551,7 +551,7 @@ function C:LevelTimes(k)
   for lv, t in pairs(c.lvlog) do
     local nx = c.lvlog[lv + 1]
     local busy = c.busy and c.busy[lv] or 0
-    if nx and nx > t then out[#out + 1] = { lv = lv, h = math.max(60, nx - t - busy) / 3600, busy = busy / 3600, est = perLvl(lv) * self:ClassMult(k) * self:ProfMult(k) * (self:Pace(k)) } end
+    if nx and nx > t then out[#out + 1] = { lv = lv, h = (nx - t) / 3600, busy = busy / 3600, est = perLvl(lv) * self:ClassMult(k) * self:ProfMult(k) * (self:Pace(k)) } end
   end
   table.sort(out, function(a, b) return a.lv > b.lv end)
   return out
@@ -570,7 +570,7 @@ function C:LevelLive()
   local frac = mx > 0 and (UnitXP("player") or 0) / mx or 0
   local est = self:LevelEst(k, lv) * 3600
   local busy = self:BusyAt(lv)
-  local spent = math.max(0, c.playedLevel + (GetTime() - self.playedAt) - busy)
+  local spent = c.playedLevel + (GetTime() - self.playedAt)
   local expect = est * frac
   return { lv = lv, spent = spent, est = est, expect = expect, ahead = expect - spent, frac = frac, busy = busy,
     played = (c.played or 0) + (GetTime() - self.playedAt) }
@@ -614,8 +614,8 @@ function C:Tonight(k)
   return { target = target, left = left, plan = plan, played = played, onPlan = onPlan, lv = lv, goal = g }
 end
 
--- time at professions, the Auction House, bank and mailbox, per level. It doesn't count against the
--- level timer, so an afternoon of crafting doesn't make your levelling look slow.
+-- time at professions, the Auction House, bank and mailbox, per level and per day. It still counts as
+-- play time; it's tracked so you can see how much of your time went on crafting.
 local open, since = {}, nil
 function C:BusyAt(lv)
   local c = self.key and self:Char(self.key)
@@ -630,8 +630,20 @@ local function flush()
   if c and lv then
     c.busy = c.busy or {}
     c.busy[lv] = (c.busy[lv] or 0) + (GetTime() - since)
+    local d = date("%Y-%m-%d")
+    c.busyDay = c.busyDay or {}
+    for day in pairs(c.busyDay) do if day < date("%Y-%m-%d", time() - 14 * 86400) then c.busyDay[day] = nil end end
+    c.busyDay[d] = (c.busyDay[d] or 0) + (GetTime() - since)
   end
   since = nil
+end
+-- crafting time today across the account (including a window open right now)
+function C:BusyToday()
+  local d = date("%Y-%m-%d")
+  local t = 0
+  for _, c in pairs(self.db.chars) do t = t + (c.busyDay and c.busyDay[d] or 0) end
+  if since then t = t + (GetTime() - since) end
+  return t
 end
 C.FlushBusy = flush
 local PAIRS = { TRADE_SKILL_SHOW = { "trade", true }, TRADE_SKILL_CLOSE = { "trade", false }, CRAFT_SHOW = { "craft", true }, CRAFT_CLOSE = { "craft", false },

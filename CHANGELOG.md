@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.3
+- Crafting counts as play time again; goal pace shown as spare time, plus crafting time today
+
 ## 0.10.2
 - Goal pace in hours (overall) alongside level pace
 - Time at professions, Auction House, bank and mail no longer counts against the level timer

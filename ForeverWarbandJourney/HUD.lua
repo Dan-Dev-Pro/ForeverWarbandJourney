@@ -32,8 +32,8 @@ local CIRCLES = "Interface\\TargetingFrame\\UI-Classes-Circles"
 local TC = { WARRIOR = { 0, .25, 0, .25 }, MAGE = { .25, .49609375, 0, .25 }, ROGUE = { .49609375, .7421875, 0, .25 }, DRUID = { .7421875, .98828125, 0, .25 },
   HUNTER = { 0, .25, .25, .5 }, SHAMAN = { .25, .49609375, .25, .5 }, PRIEST = { .49609375, .7421875, .25, .5 }, WARLOCK = { .7421875, .98828125, .25, .5 },
   PALADIN = { 0, .25, .5, .75 } }
-local ROWS = { "tonight", "week", "goal", "target", "raids", "journey" }
-local LABEL = { tonight = "Tonight", week = "This week", goal = "Goal", target = "Target", raids = "Raids", journey = "Journey" }
+local ROWS = { "tonight", "craft", "week", "goal", "target", "raids", "journey" }
+local LABEL = { tonight = "Tonight", craft = "Crafting", week = "This week", goal = "Goal", target = "Target", raids = "Raids", journey = "Journey" }
 
 function C:CreateHUD()
   if self.hud then return end
@@ -129,8 +129,9 @@ function C:UpdateHUD()
   if g and g.ch == k then
     -- overall pace on the goal, in hours of play
     local gh = self:GoalAheadHours(g)
-    if gh and math.abs(gh) >= 1 / 6 then f.status:SetText(DIM .. "goal |r" .. (gh > 0 and (GREEN .. hm(gh * 3600) .. " ahead|r") or (RED .. hm(-gh * 3600) .. " behind|r")))
-    elseif gh then f.status:SetText(DIM .. "goal |r" .. GOLD .. "on plan|r")
+    -- ahead of the goal = spare time you can spend on crafting (or anything) and still be on plan
+    if gh and math.abs(gh) >= 1 / 6 then f.status:SetText(gh > 0 and (GREEN .. hm(gh * 3600) .. " spare|r") or (RED .. hm(-gh * 3600) .. " behind|r"))
+    elseif gh then f.status:SetText(GOLD .. "on plan|r")
     else f.status:SetText(GOLD .. "active goal|r") end
   elseif g then f.status:SetText(DIM .. "plan says " .. self:Short(g.ch) .. "|r")
   else f.status:SetText(#self.db.goals == 0 and (DIM .. "no goals|r") or (GREEN .. "goals done|r")) end
@@ -159,6 +160,8 @@ function C:UpdateHUD()
     elseif tn.left > 0 then val.tonight = string.format("%s%.1f|r %sin %.1f h%s", GOLD, tn.target, DIM, tn.left, tn.onPlan and " (plan)" or "") .. "|r"
     else val.tonight = DIM .. "bonus time|r" end
   end
+  local bt = self.BusyToday and self:BusyToday() or 0
+  if bt >= 60 then val.craft = hm(bt) .. DIM .. " today|r" end
   local played, plan = self:WeekPlayed()
   val.week = string.format("%.1f %s/ %d h|r", played, DIM, plan)
   local now = time()

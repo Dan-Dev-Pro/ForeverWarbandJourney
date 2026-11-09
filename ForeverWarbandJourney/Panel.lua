@@ -213,7 +213,7 @@ local function headerOps(W)
   if g and g.ch == k then
     local gh = C:GoalAheadHours(g)
     local function hmm(h) local m = math.abs(h) * 60; return m >= 60 and string.format("%dh %02dm", m / 60, m % 60) or string.format("%dm", m) end
-    if gh and gh >= 1 / 6 then L:pill(84, 56, "goal " .. hmm(gh) .. " ahead", T.green)
+    if gh and gh >= 1 / 6 then L:pill(84, 56, hmm(gh) .. " spare", T.green)
     elseif gh and gh <= -1 / 6 then L:pill(84, 56, "goal " .. hmm(gh) .. " behind", T.red)
     else L:pill(84, 56, "on plan", T.gold) end
   elseif g then L:pill(84, 56, "plan says " .. C:Short(g.ch), T.grey)
@@ -304,7 +304,7 @@ function BODY.Now(L, k)
     local r = rows[mine.id]
     local gh = C:GoalAheadHours(mine)
     local status, scol = nil, T.gold
-    if gh and gh >= 1 / 6 then status, scol = hm(gh * 3600) .. " ahead", T.green
+    if gh and gh >= 1 / 6 then status, scol = hm(gh * 3600) .. " spare", T.green
     elseif gh and gh <= -1 / 6 then status, scol = hm(-gh * 3600) .. " behind", T.red
     elseif gh then status = "on plan" end
     L:card("Level " .. mine.to .. (mine.by and ("  by " .. mine.by) or ""), function(L, x, w)
@@ -315,7 +315,7 @@ function BODY.Now(L, k)
       L:tiles(x, w, { { string.format("%.1f h", h), "left to play" },
         { r and r.at > 0 and date("%a %d %b", r.at) or "-", "finish" },
         tn and { tn.onPlan and tn.target <= lv and "on plan" or string.format("%.1f", tn.target), "tonight", T.gold } or { string.format("%.2f", (C:Pace(k))), "pace" } })
-    end, status, "Top right: overall pace on this goal, in hours of play ahead of or behind the deadline plan.\nLeft to play: hours at your own pace.\nFinish: when you'll get there, from your playing hours.\nTonight: the level to reach by midnight to stay on plan.", scol)
+    end, status, "Top right: overall pace on this goal. Spare is how much play time you're ahead of the deadline plan: time you can spend crafting (or anything else) and still be on plan.\nLeft to play: hours at your own pace.\nFinish: when you'll get there, from your playing hours.\nTonight: the level to reach by midnight to stay on plan.", scol)
   end
   -- to do
   local items = {}
@@ -338,9 +338,9 @@ function BODY.Now(L, k)
   L:card("This level", function(L, x, w)
     if live then
       local good = live.ahead >= 0
-      L:line(x, w, { label = string.format("Level %d   %s of %s", live.lv, hm(live.spent), hm(live.est)), mid = live.busy >= 60 and ("+" .. hm(live.busy) .. " other") or nil,
+      L:line(x, w, { label = string.format("Level %d   %s of %s", live.lv, hm(live.spent), hm(live.est)), mid = live.busy >= 60 and (hm(live.busy) .. " crafting") or nil,
         value = (good and "ahead " or "behind ") .. hm(live.ahead), vcol = good and T.green or T.red,
-        tip = "This level\nTime levelling on this level against its estimate." .. (live.busy >= 60 and ("\n" .. hm(live.busy) .. " at professions, the Auction House, bank or mail isn't counted.") or "") })
+        tip = "This level\nAll play time on this level against its estimate." .. (live.busy >= 60 and ("\n" .. hm(live.busy) .. " of it was at professions, the Auction House, bank or mail.") or "") })
       L:bar(x, L.y, w, 6, math.min(live.spent, live.est), math.max(1, live.est), good and T.green or T.red)
       L:rect(x + w * math.min(1, live.expect / math.max(1, live.est)) - 1, L.y - 2, 2, 10, T.gold)
       L.y = L.y + 12
