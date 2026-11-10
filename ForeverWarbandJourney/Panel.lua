@@ -566,8 +566,28 @@ function BODY.Trades(L, k)
         L:line(x, w, { icon = "Trade_Mining", label = "Make: " .. table.concat(mk, ", "), lcol = T.grey })
       end
       L:line(x, w, { label = "Total", lcol = T.gold, value = C.MoneyText(shop.total) .. (shop.unpriced > 0 and string.format(" |cffa89a84+%d?|r", shop.unpriced) or ""), vcol = T.gold })
-    end, C.db.prices and next(C.db.prices) and "priced" or "scan at the AH",
+    end, C:HasAuctionator() and "Auctionator prices" or (C.db.prices and next(C.db.prices) and "priced" or "scan at the AH"),
     "What's still short of your targets, after counting bags and banks on every character.\nPress Scan prices at the Auction House: the route and this list switch to the cheapest options, ore against bars included.")
+  end
+  -- gold makers
+  if C:HavePrices() then
+    local gm = C:GoldMakers(k, 5)
+    L:card("Gold", function(L, x, w)
+      if #gm == 0 then
+        L:line(x, w, { label = C:HasAuctionator() and "No profitable crafts at current prices" or "Scan prices to find profitable crafts", lcol = T.grey })
+      end
+      for _, e in ipairs(gm) do
+        local mk = e.market
+        local note = e.how == "disenchant" and "disenchant" or e.how == "vendor" and "vendor" or (mk and (mk.days .. "/7 days") or "")
+        local tip = e.name .. string.format("\nSells for %s, materials %s, profit %s", C.MoneyText(e.value), C.MoneyText(e.cost), C.MoneyText(e.profit))
+          .. (e.how == "ah" and "\nAuction House price after the 5% cut." or e.how == "disenchant" and "\nWorth more disenchanted than sold." or "\nWorth most sold to a vendor.")
+          .. (mk and string.format("\nListed %d of the last 7 scan days, about %d up at a time.", mk.days, mk.qty) or "")
+          .. ((e.col and e.col ~= "grey") and "\nStill gives skill-ups." or "")
+          .. (e.age and e.age > 2 and string.format("\nPrice is %d days old: do a full scan in Auctionator.", e.age) or "")
+        L:line(x, w, { dot = C.COLOURS[e.col] or T.grey, label = e.name, mid = note, value = "+" .. C.MoneyText(e.profit), vcol = T.green, tip = tip })
+      end
+    end, C:HasAuctionator() and "Auctionator prices" or "your scan",
+    "Recipes you know, ranked by profit per craft: what it sells for (after the AH cut), or disenchants for, minus the cheapest materials.\nItems that show up on the AH most days rank higher; rarely-listed ones may not sell.\nDo a full scan in Auctionator now and then to keep prices fresh.")
   end
   if C.sess and C.sess.mats and next(C.sess.mats) and k == C.key then
     L:card("Gathered", function(L, x, w)

@@ -2,10 +2,87 @@
 -- Works with the modern Auction House (C_AuctionHouse) and the classic one (QueryAuctionItems).
 local C = FWJ
 
--- cost to buy n of an item from the last scan: walks the cheapest listings first
+-- Auctionator ------------------------------------------------------------------------------------
+-- When Auctionator is installed, its price database (from its full scans) fills in any item FWJ
+-- hasn't scanned itself. Only its public API is used, except price history, which is read carefully.
+local ATR = "ForeverWarbandJourney"
+local function atr() return Auctionator and Auctionator.API and Auctionator.API.v1 end
+function C:HasAuctionator() return atr() ~= nil end
+function C:AtrPrice(id)
+  local a = atr()
+  if not a then return nil end
+  local ok, p = pcall(a.GetAuctionPriceByItemID, ATR, id)
+  return ok and p and p > 0 and p or nil
+end
+function C:AtrAge(id)
+  local a = atr()
+  if not a or not a.GetAuctionAgeByItemID then return nil end
+  local ok, d = pcall(a.GetAuctionAgeByItemID, ATR, id)
+  return ok and d or nil
+end
+-- how the market looks for an item over the last week: days it was listed, typical quantity, recent vs average price
+function C:Market(id)
+  local db = Auctionator and Auctionator.Database
+  if not db or not db.GetPriceHistory then return nil end
+  local ok, hist = pcall(db.GetPriceHistory, db, tostring(id))
+  if not ok or type(hist) ~= "table" or #hist == 0 then return nil end
+  local days, qty, sum = 0, 0, 0
+  for i = 1, math.min(7, #hist) do
+    local h = hist[i]
+    days = days + 1
+    qty = qty + (h.available or 0)
+    sum = sum + (h.minSeen or 0)
+  end
+  return { days = days, qty = days > 0 and qty / days or 0, avg = days > 0 and sum / days or nil, last = hist[1].minSeen }
+end
+-- what one crafted item is worth to you: the best of selling on the AH (after the 5% cut),
+-- disenchanting it (Auctionator's estimate), or selling to a vendor
+function C:SellValue(id)
+  local a = atr()
+  local best, how = 0, nil
+  local p = self:AtrPrice(id)
+  local own = self.db.prices and self.db.prices[id] and self.db.prices[id].l and self.db.prices[id].l[1]
+  if own and (not p or self.db.prices[id].t > time() - 86400) then p = own[1] end
+  if p then best, how = p * .95, "ah" end
+  if a and a.GetDisenchantPriceByItemID then
+    local ok, de = pcall(a.GetDisenchantPriceByItemID, ATR, id)
+    if ok and de and de > best then best, how = de, "disenchant" end
+  end
+  local vendor
+  if a and a.GetVendorPriceByItemID then local ok, v = pcall(a.GetVendorPriceByItemID, ATR, id); vendor = ok and v or nil end
+  if not vendor and GetItemInfo then vendor = select(11, GetItemInfo(id)) end
+  if vendor and vendor > best then best, how = vendor, "vendor" end
+  return best > 0 and best or nil, how
+end
+
+-- send a character's shopping list to Auctionator, so its Shopping tab can search it in one click
+function C:SendToAuctionator(k)
+  local a = atr()
+  if not a or not a.CreateShoppingList then return false end
+  local shop = self:Shopping(k)
+  local terms = {}
+  for _, e in ipairs(shop.buy) do
+    local it = C.ITEM[e.id]
+    local name = (it and it[1]) or (self.db.items and self.db.items[e.id])
+    if name and not (it and it[2] == "vendor") then
+      local ok, str = pcall(a.ConvertToSearchString, ATR, { searchString = name, isExact = true, quantity = e.n })
+      terms[#terms + 1] = ok and str or ('"' .. name .. '"')
+    end
+  end
+  if #terms == 0 then return false end
+  local ok = pcall(a.CreateShoppingList, ATR, "FWJ " .. self:Short(k), terms)
+  return ok
+end
+
+-- cost to buy n of an item from the last scan: walks the cheapest listings first.
+-- Falls back to Auctionator's last price (no depth, so it's assumed you can buy n at that price).
 function C:BuyCost(id, n)
   local p = self.db.prices and self.db.prices[id]
-  if not p or not p.l or #p.l == 0 then return nil end
+  if not p or not p.l or #p.l == 0 then
+    local ap = self:AtrPrice(id)
+    if ap then return ap * n, n, nil end
+    return nil
+  end
   local left, total = n, 0
   for _, l in ipairs(p.l) do
     local take = math.min(left, l[2])
@@ -26,13 +103,13 @@ function C:HasProf(p)
   for _, c in pairs(self.db.chars) do if c.profs and c.profs[p] then return true end end
   return false
 end
-function C:HavePrices() return self.db.prices and next(self.db.prices) ~= nil end
+function C:HavePrices() return (self.db.prices and next(self.db.prices) ~= nil) or self:HasAuctionator() end
 
 -- cheapest unit cost of an item: vendor, Auction House (priced on 20 units, so a lone cheap listing
 -- doesn't win), or making it from its parts if someone on the account has that profession
 local ucache, ucv = {}, -1
 function C:UnitCost(id, depth)
-  local v = (self.priceV or 0) * 1000 + (self.convV or 0)
+  local v = (self.priceV or 0) * 1000 + (self.convV or 0) + math.floor(GetTime() / 60) * 1e7
   if ucv ~= v then ucache, ucv = {}, v end
   local hit = ucache[id]
   if hit then return hit.c or nil, hit.how end
@@ -135,7 +212,7 @@ for _, e in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "COMMODITY_SE
 end
 ev:SetScript("OnEvent", function(_, e, a1)
   if not C.db then return end
-  if e == "AUCTION_HOUSE_SHOW" then C:AHShow()
+  if e == "AUCTION_HOUSE_SHOW" then C:AHShow(); if C:HasAuctionator() then C:SendToAuctionator(C.key) end
   elseif e == "AUCTION_HOUSE_CLOSED" then
     queue = {}; current = nil; C.scanning = false
     if C.ahPanel then C.ahPanel:Hide() end
@@ -192,6 +269,12 @@ function C:AHShow()
     b:SetSize(96, 20); b:SetPoint("TOPRIGHT", -10, -9); b:SetText("Scan prices")
     b:SetScript("OnClick", function() C:ScanShopping() end)
     f.btn = b
+    if C:HasAuctionator() then
+      local b2 = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+      b2:SetSize(96, 20); b2:SetPoint("RIGHT", b, "LEFT", -4, 0); b2:SetText("To Auctionator")
+      b2:SetScript("OnClick", function() if C:SendToAuctionator(C.key) then C:Print("shopping list sent to Auctionator: FWJ " .. C:Short(C.key)) end end)
+      f.btn2 = b2
+    end
     f.rows = {}
     f.total = f:CreateFontString(nil, "OVERLAY", "GameFontNormal"); f.total:SetJustifyH("RIGHT")
     self.ahPanel = f
@@ -250,4 +333,47 @@ function C:AHRefresh()
   f.total:SetText((self.scanning and string.format("Scanning, %d left...  ", #queue + (current and 1 or 0)) or "") .. "Total " .. money(shop.total)
     .. (shop.unpriced > 0 and string.format("  |cffa89a84(%d unpriced)|r", shop.unpriced) or ""))
   f:SetHeight(-y + 28)
+end
+
+-- gold makers: recipes a character knows, ranked by profit per craft at current prices
+function C:GoldMakers(k, n)
+  local c = self:Char(k)
+  local out = {}
+  for prof, v in pairs(c and c.profs or {}) do
+    local known = c.known and c.known[prof]
+    if known then
+      local recs = self:RecipesFor(k, prof)
+      for name, live in pairs(known) do
+        local rec = recs[name]
+        local made = rec and rec.m or live[4]
+        if rec and made and made > 0 then
+          local cost, ok = 0, true
+          for _, m in ipairs(rec.r) do
+            local u = self:UnitCost(m[1])
+            if not u then ok = false; break end
+            cost = cost + u * m[2]
+          end
+          local value, how = self:SellValue(made)
+          if ok and value then
+            local qty = rec.n or live[5] or 1
+            local profit = value * qty - cost
+            if profit > 0 then
+              local mk = self:Market(made)
+              out[#out + 1] = { name = name, prof = prof, made = made, qty = qty, cost = cost, value = value * qty, profit = profit,
+                how = how, market = mk, col = live[1], age = self:AtrAge(made) }
+            end
+          end
+        end
+      end
+    end
+  end
+  -- rank by profit, but favour things that actually appear on the AH most days
+  table.sort(out, function(a, b)
+    local fa = a.how ~= "ah" and 1 or (a.market and math.min(1, a.market.days / 5) or .5)
+    local fb = b.how ~= "ah" and 1 or (b.market and math.min(1, b.market.days / 5) or .5)
+    return a.profit * fa > b.profit * fb
+  end)
+  local top = {}
+  for i = 1, math.min(n or 5, #out) do top[i] = out[i] end
+  return top
 end

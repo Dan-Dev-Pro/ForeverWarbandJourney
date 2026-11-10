@@ -230,6 +230,8 @@ function C:ReadTradeSkill(craft)
               end
             end
             known[r.name][3] = rr
+            known[r.name][4] = sc.outputItemID
+            known[r.name][5] = math.max(1, sc.quantityMin or 1)
           end
           if out and (C.MADEFROM[out] or C.ITEM[out]) and sc.reagentSlotSchematics then
             local q = math.max(1, sc.quantityMin or 1)
@@ -330,7 +332,7 @@ function C:RecipesFor(k, prof)
   for name, live in pairs(known or {}) do
     if not out[name] and live[3] and #live[3] > 0 then
       local gq = GUESS[live[1]]
-      if gq then out[name] = { l = 0, y = s0 + gq[1], g = s0 + gq[2], r = live[3], extra = true } end
+      if gq then out[name] = { l = 0, y = s0 + gq[1], g = s0 + gq[2], r = live[3], m = live[4], n = live[5] or 1, extra = true } end
     end
   end
   rcache = { [key] = out }

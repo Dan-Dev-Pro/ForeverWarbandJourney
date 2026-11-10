@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+- Auctionator: prices from its database, shopping list sent to its Shopping tab
+- Gold card: known recipes ranked by profit (AH after cut, disenchant or vendor) vs cheapest materials
+
 ## 0.10.3
 - Crafting counts as play time again; goal pace shown as spare time, plus crafting time today
 

@@ -138,8 +138,8 @@ function C:UpdateHUD()
 
   local live = self.LevelLive and self:LevelLive()
   if live then
-    f.sub:SetText(string.format("Level %d  %s %s/ %s|r", live.lv, hm(live.spent), DIM, hm(live.est)))
-    f.subR:SetText(DIM .. "level |r" .. (live.ahead >= 0 and (GREEN .. hm(live.ahead) .. " ahead|r") or (RED .. hm(-live.ahead) .. " behind|r")))
+    f.sub:SetText(string.format("%slevel|r %s %s/ %s|r", DIM, hm(live.spent), DIM, hm(live.est)))
+    f.subR:SetText(live.ahead >= 0 and (GREEN .. hm(live.ahead) .. " ahead|r") or (RED .. hm(-live.ahead) .. " behind|r"))
   elseif not max then
     f.sub:SetText(DIM .. "Level time shows after /played loads|r"); f.subR:SetText("")
   else f.sub:SetText("Level 60"); f.subR:SetText("") end
