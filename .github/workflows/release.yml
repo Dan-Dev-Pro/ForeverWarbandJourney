@@ -1,0 +1,33 @@
+name: Release
+# Push a tag like v0.11.0 and this builds the addon zip and publishes a GitHub release with it.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: zip -r "ForeverWarbandJourney-${GITHUB_REF_NAME#v}.zip" ForeverWarbandJourney
+      - name: Notes from the changelog
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          {
+            echo "## Install"
+            echo "1. Download **ForeverWarbandJourney-$v.zip** below."
+            echo '2. Unzip into `World of Warcraft\_forever_\Interface\AddOns\` so you get `AddOns\ForeverWarbandJourney\ForeverWarbandJourney.toc`.'
+            echo '3. Restart WoW and type `/fwj`. Log in on each character once, then add goals on the Goals tab.'
+            echo
+            echo "Optional: Auctionator (prices, shopping list export) and Journey (guide step on the tracker)."
+            echo
+            echo "## Changes"
+            awk -v v="## $v" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md
+          } > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Forever Warband Journey ${{ github.ref_name }}
+          body_path: notes.md
+          files: ForeverWarbandJourney-*.zip
