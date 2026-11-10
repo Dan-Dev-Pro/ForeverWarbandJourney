@@ -4,7 +4,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: ["ForeverWarbandJourney/ForeverWarbandJourney.toc"]
+    paths: ["ForeverWarbandJourney/ForeverWarbandJourney.toc", ".github/workflows/release.yml"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Read version
         id: v
-        run: echo "version=$(grep -m1 '^## Version:' ForeverWarbandJourney/ForeverWarbandJourney.toc | sed 's/## Version: *//' | tr -d '\r ')" >> "$GITHUB_OUTPUT"
+        run: |
+          v=$(grep -m1 '^## Version:' ForeverWarbandJourney/ForeverWarbandJourney.toc | sed 's/## Version: *//' | tr -d '\r ')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - name: Skip if already released
         id: check
         env:
