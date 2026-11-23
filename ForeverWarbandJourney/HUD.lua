@@ -98,7 +98,7 @@ function C:CreateHUD()
   f:SetScript("OnLeave", function() GameTooltip:Hide() end)
   self.hud = f
   if not C.db.opt.hud then f:Hide() end
-  C_Timer.NewTicker(2, function() C:UpdateHUD() end)
+  C_Timer.NewTicker(2, function() C.Safe(C.UpdateHUD, C) end)
   self:UpdateHUD()
 end
 

@@ -307,3 +307,6 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
 end)
 
 C_Timer.NewTicker(30, function() if C.db then C:TickDay() end end)
+
+-- errors in event handlers are logged once instead of popping up every time the event fires
+do local h = ev:GetScript("OnEvent"); if h then ev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end

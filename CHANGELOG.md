@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.1
+- Error log: errors are saved (FWJ_ERRORS) instead of repeating, and the addon keeps running
+
 ## 0.11.0
 - Auctionator: prices from its database, shopping list sent to its Shopping tab
 - Gold card: known recipes ranked by profit (AH after cut, disenchant or vendor) vs cheapest materials

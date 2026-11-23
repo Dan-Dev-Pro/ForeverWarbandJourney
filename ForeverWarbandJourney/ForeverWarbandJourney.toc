@@ -3,12 +3,13 @@
 ## Title: Forever Warband Journey
 ## Notes: Levelling goals, pace tracking and training benchmarks across your characters.
 ## Author: Dan
-## Version: 0.11.0
+## Version: 0.11.1
 ## X-Website: https://github.com/Dan-Dev-Pro/ForeverWarbandJourney
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
-## SavedVariables: FWJDB
+## SavedVariables: FWJDB, FWJ_ERRORS
 ## OptionalDeps: Journey, Auctionator
 
+ErrLog.lua
 Data.lua
 DataProf.lua
 AH.lua

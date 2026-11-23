@@ -680,3 +680,7 @@ function C:GoalAheadHours(g)
   if L >= e then return self:Hours(g.ch, e, L) end
   return -self:Hours(g.ch, L, e)
 end
+
+-- errors in event handlers are logged once instead of popping up every time the event fires
+do local h = ev:GetScript("OnEvent"); if h then ev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end
+do local h = bev:GetScript("OnEvent"); if h then bev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end

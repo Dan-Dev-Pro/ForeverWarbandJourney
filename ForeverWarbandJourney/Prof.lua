@@ -702,3 +702,6 @@ function C:NextSteps(k, prof, skill, to)
   end
   return steps, false, done
 end
+
+-- errors in event handlers are logged once instead of popping up every time the event fires
+do local h = ev:GetScript("OnEvent"); if h then ev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end
