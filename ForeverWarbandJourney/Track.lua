@@ -157,6 +157,7 @@ end
 
 -- Dedicated Study: 23 h cooldown, remembered per character
 function C:OnSpell(spellID)
+  if not spellID then return end
   local name = GetSpellInfo and GetSpellInfo(spellID) or (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID) or {}).name
   if name == "Dedicated Study" and self.key then
     self:Char(self.key).study = time()
@@ -294,13 +295,13 @@ ev:SetScript("OnEvent", function(_, e, a1, a2, a3)
     if C.key then C:Char(C.key).played = a1 end
     C.playedAt = GetTime(); C:TickDay()
   elseif e == "PLAYER_XP_UPDATE" then C:OnXP()
-  elseif e == "CHAT_MSG_COMBAT_XP_GAIN" then C:KillXP(a1)
-  elseif e == "CHAT_MSG_LOOT" then C:OnLoot(a1)
+  elseif e == "CHAT_MSG_COMBAT_XP_GAIN" then C:KillXP(C.Plain(a1))
+  elseif e == "CHAT_MSG_LOOT" then C:OnLoot(C.Plain(a1))
   elseif e == "MERCHANT_SHOW" then C:OnMerchant()
   elseif e == "UPDATE_INVENTORY_DURABILITY" then C:CheckDurability()
   elseif e == "BAG_UPDATE_DELAYED" then C:CheckBags(); if C.ScanBags then C:ScanBags() end
   elseif e == "PLAYER_UPDATE_RESTING" or e == "UPDATE_EXHAUSTION" then C:SaveRested()
-  elseif e == "UNIT_SPELLCAST_SUCCEEDED" then if a1 == "player" then C:OnSpell(a3) end
+  elseif e == "UNIT_SPELLCAST_SUCCEEDED" then if C.Plain(a1) == "player" then C:OnSpell(C.PlainNum(a3)) end
   elseif e == "MAIL_SHOW" then C:MailButton(); if C.MailHelper then C:MailHelper() end
   elseif e == "PLAYER_LOGOUT" then C:TickDay(); C:SaveRested(); C:EndSession()
   end

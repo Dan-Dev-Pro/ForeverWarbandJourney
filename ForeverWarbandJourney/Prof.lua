@@ -286,8 +286,10 @@ local NODE = {}
 for prof, list in pairs(C.NODES) do for _, n in ipairs(list) do NODE[n[1]] = { prof, n } end end
 local function onTip(tt)
   if not C.db or C.db.opt.nodeTips == false then return end
-  local l1 = _G[tt:GetName() .. "TextLeft1"]
-  local t = l1 and l1:GetText()
+  if IsInInstance and IsInInstance() then return end   -- no herbs or veins worth judging, and tooltip text is secret there
+  local name = tt.GetName and tt:GetName()
+  local l1 = name and _G[name .. "TextLeft1"]
+  local t = C.Plain(l1 and l1:GetText())
   local hit = t and NODE[t]
   if not hit or tt.fwjNode == t then return end
   local v = C:NodeVerdict(C.key, hit[1], hit[2])
@@ -297,10 +299,13 @@ local function onTip(tt)
   tt:AddLine("FWJ: " .. v[1] .. "  |cffa89a84" .. v[2] .. "|r", col[1], col[2], col[3])
   tt:Show()
 end
-if GameTooltip then
-  GameTooltip:HookScript("OnShow", onTip)
+if GameTooltip and GameTooltip.HookScript then
+  -- the first line isn't always filled in when the tooltip shows, so look once more on the next frame
+  GameTooltip:HookScript("OnShow", function(tt)
+    C.Safe(onTip, tt)
+    if C_Timer then C_Timer.After(0, function() if tt:IsShown() and not tt.fwjNode then C.Safe(onTip, tt) end end) end
+  end)
   GameTooltip:HookScript("OnHide", function(tt) tt.fwjNode = nil end)
-  if GameTooltip.HookScript then GameTooltip:HookScript("OnUpdate", function(tt) if not tt.fwjNode then onTip(tt) end end) end
 end
 
 local ev = CreateFrame("Frame")

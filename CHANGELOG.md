@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.3
+- Fix: errors in instances from reading secret tooltip and chat values; node tooltips skip instances
+- Node tooltip no longer checks every frame
+
 ## 0.11.2
 - Realm renames: a character's history, role and goals move to its new realm name on login
 

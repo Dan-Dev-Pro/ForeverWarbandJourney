@@ -22,6 +22,22 @@ if seterrorhandler and prev then
     return prev(msg, ...)
   end)
 end
+-- In instances the client hands addons "secret" values (tooltip text, chat text, unit info) that can't
+-- be read, compared or used as table keys. This returns the value only when it's a plain, readable string.
+function C.Plain(v)
+  if v == nil then return nil end
+  if issecretvalue and issecretvalue(v) then return nil end
+  if canaccessvalue and not canaccessvalue(v) then return nil end
+  if type(v) ~= "string" then return nil end
+  return v
+end
+function C.PlainNum(v)
+  if v == nil then return nil end
+  if issecretvalue and issecretvalue(v) then return nil end
+  if canaccessvalue and not canaccessvalue(v) then return nil end
+  return type(v) == "number" and v or nil
+end
+
 -- run a function, logging (once) instead of throwing; used for timers and refreshes that repeat
 function C.Safe(f, ...)
   local ok, err = xpcall(f, function(e) record(e, debugstack and debugstack(2, 20, 0)); return e end, ...)
