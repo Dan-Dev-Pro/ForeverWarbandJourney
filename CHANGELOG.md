@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.2
+- Realm renames: a character's history, role and goals move to its new realm name on login
+
 ## 0.11.1
 - Error log: errors are saved (FWJ_ERRORS) instead of repeating, and the addon keeps running
 

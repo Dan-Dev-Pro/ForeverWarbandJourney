@@ -504,6 +504,8 @@ ev:SetScript("OnEvent", function(_, e, a1, a2)
     local isNew = not C.db.chars[C.key]
     C:Snapshot()
     local c = C.db.chars[C.key]
+    -- same character under an old realm name (Forever renamed its realms): carry everything over
+    if C:MergeRenamed(C.key) then isNew = false end
     if isNew then
       c.trained = c.level
       local n = #C:Plan()
@@ -684,3 +686,31 @@ end
 -- errors in event handlers are logged once instead of popping up every time the event fires
 do local h = ev:GetScript("OnEvent"); if h then ev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end
 do local h = bev:GetScript("OnEvent"); if h then bev:SetScript("OnEvent", function(...) FWJ.Safe(h, ...) end) end end
+
+-- Realm renames: a character that logs in under a new realm name gets a new key. If an old record
+-- has the same name and class and isn't ahead of it, it's the same character: move its history,
+-- role, plan position and goals across, then drop the old record.
+local CARRY = { "role", "inPlan", "order", "legacy", "lvlog", "busy", "busyDay", "jg", "jny", "known", "knownSkill", "bank", "bankT", "riding", "trained", "restedAt" }
+function C:MergeRenamed(k)
+  local c = self.db.chars[k]
+  if not c or not c.name then return false end
+  local oldKey
+  for key, o in pairs(self.db.chars) do
+    if key ~= k and o.name == c.name and o.classFile == c.classFile and (o.level or 0) <= (c.level or 0) then
+      if not oldKey or (o.seen or 0) > (self.db.chars[oldKey].seen or 0) then oldKey = key end
+    end
+  end
+  if not oldKey then return false end
+  local o = self.db.chars[oldKey]
+  for _, f in ipairs(CARRY) do if o[f] ~= nil and c[f] == nil then c[f] = o[f] end end
+  if o.inPlan then c.inPlan, c.role, c.order = true, o.role, o.order end
+  for _, g in ipairs(self.db.goals) do if g.ch == oldKey then g.ch = k end end
+  for _, day in pairs(self.db.days or {}) do if day[oldKey] and not day[k] then day[k] = day[oldKey] end; day[oldKey] = nil end
+  for _, sn in ipairs(self.db.sessions or {}) do if sn.ch == oldKey then sn.ch = k end end
+  if self.db.routes and self.db.routes[oldKey] then self.db.routes[k] = self.db.routes[k] or self.db.routes[oldKey]; self.db.routes[oldKey] = nil end
+  if self.form and self.form.goalCh == oldKey then self.form.goalCh = k end
+  if self.view == oldKey then self.view = k end
+  self.db.chars[oldKey] = nil
+  self:Print(string.format("moved %s's history from %s to %s (the realm was renamed).", c.name, oldKey:match("%-(.+)$") or "?", k:match("%-(.+)$") or "?"))
+  return true
+end
